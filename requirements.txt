@@ -1,0 +1,5 @@
+PyAudio==0.2.14
+pyttsx3==2.98
+SpeechRecognition==3.14.1
+openai-whisper @ git+https://github.com/openai/whisper.git@517a43ecd132a2089d85f4ebc044728a71d49f6e
+ollama==0.4.7
