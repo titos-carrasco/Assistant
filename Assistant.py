@@ -9,11 +9,16 @@ import time
 class Assistant:
     def __init__(self, llm, transcriber_model, speech_volume=1, speech_rate=160):
         print("Inicializando LLM ...", flush=True)
+        self.llm = llm
+        self.messages = [
+            {
+                "role": "system",
+                "content": "Responde en español.",
+            }
+        ]
         ollama.chat(
-            model=llm,
-            messages=[
-                {"role": "user", "content": ""},
-            ],
+            model=self.llm,
+            messages=self.messages,
             options={"num_predict": 1},
             stream=False,
         )
@@ -63,7 +68,7 @@ class Assistant:
             print("Inicialización finalizada", flush=True)
             print("Diga 'Salir' para finalizar", flush=True)
 
-            prompt = "\n>>"
+            prompt = "\n>> Escuchando ..."
             show_prompt = True
             while True:
                 # esperamos por un nuevo audio
@@ -76,24 +81,21 @@ class Assistant:
                     continue
 
                 # transcribimos el audio
+                print("\r>> Transcribiendo ...  ", end="", flush=True)
                 transcription = self.transcribe_audio(audio)
                 if transcription is None:
                     continue
 
+                print("\r>> ", end="", flush=True)
                 print(transcription, flush=True)
-                if transcription == "Salir":
+                if transcription.lower() == "salir":
                     break
 
-                # el audio transcriot lo enviamos al LLM
+                # el audio transcrito lo enviamos al LLM
+                self.messages.append({"role": "user", "content": transcription})
                 resp = ollama.chat(
-                    model="deepseek-r1:latest",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "Realiza todo tu razonamiento en español y responde únicamente en ese idioma.",
-                        },
-                        {"role": "user", "content": transcription},
-                    ],
+                    model=self.llm,
+                    messages=self.messages,
                     options={
                         "num_ctx": 2048,
                         "temperature": 0.5,
@@ -103,10 +105,12 @@ class Assistant:
                 )
 
                 # presentamos lo que nos va devolviendo el LLM
+                answer = ""
                 word = ""
                 dot = False
                 for chunk in resp:
                     text = chunk.message.content
+                    answer = answer + text
                     for ch in text:
                         if not dot:
                             word = word + ch
@@ -133,10 +137,15 @@ class Assistant:
                 print()
                 show_prompt = True
 
+                # agregamos la respuesta del llm
+                self.messages.append({"role": "assistant", "content": answer})
+
         print("Eso es todo amigos !!!", flush=True)
 
 
 # ---
 
-app = Assistant("deepseek-r1:latest", "base")
+# llm: phi3, llama3, deepseek-r1 -- https://ollama.com/search
+# transcriber_model: tiny, base, small, medium large, large-v2
+app = Assistant(llm="deepseek-r1:latest", transcriber_model="small")
 app.run()
