@@ -145,7 +145,7 @@ class Assistant:
 
 # ---
 
-# llm: phi3, llama3, deepseek-r1 -- https://ollama.com/search
+# llm: phi3, llama3, deepseek-r1, deepseek-v2 -- https://ollama.com/search
 # transcriber_model: tiny, base, small, medium large, large-v2
-app = Assistant(llm="deepseek-r1:latest", transcriber_model="small")
+app = Assistant(llm="llama3", transcriber_model="small")
 app.run()
