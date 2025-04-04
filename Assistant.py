@@ -3,17 +3,30 @@ import whisper
 import pyttsx3
 import speech_recognition as sr
 import numpy as np
+import queue
+import threading
 import time
 
 
 class Assistant:
-    def __init__(self, llm, transcriber_model, speech_volume=1, speech_rate=160):
+    def __init__(
+        self,
+        llm,
+        transcriber_model,
+        speech_volume=1,
+        speech_rate=160,
+        fprompt="Contexto.txt",
+    ):
         print("Inicializando LLM ...", flush=True)
+        f = open(fprompt, "r", encoding="utf-8")
+        prompt = ""
+        prompt = prompt.join(f.readlines(-1))
+        f.close()
         self.llm = llm
         self.messages = [
             {
                 "role": "system",
-                "content": "Responde en español.",
+                "content": prompt,
             }
         ]
         ollama.chat(
@@ -22,6 +35,7 @@ class Assistant:
             options={"num_predict": 1},
             stream=False,
         )
+        self.queue = queue.Queue(0)
 
         print("Inicializando Transcriptor...", flush=True)
         self.transcriber = whisper.load_model(transcriber_model)
@@ -60,6 +74,24 @@ class Assistant:
         else:
             return transcription
 
+    def _chat(self):
+        resp = ollama.chat(
+            model=self.llm,
+            messages=self.messages,
+            options={
+                "num_ctx": 2048,
+                "temperature": 0.5,
+                "num_predict": 512,
+            },
+            stream=True,
+        )
+
+        for chunk in resp:
+            text = chunk.message.content
+            self.queue.put(text)
+            time.sleep(0.001)
+        self.queue.put(None)
+
     def run(self):
         print("Ajustando a ruido ambiental ...", flush=True)
         with sr.Microphone(sample_rate=16000) as mic:
@@ -81,35 +113,39 @@ class Assistant:
                     continue
 
                 # transcribimos el audio
-                print("\r>> Transcribiendo ...  ", end="", flush=True)
+                print(
+                    "\r>>                                                  ",
+                    end="",
+                    flush=True,
+                )
+                print("\r>> Transcribiendo ...", end="", flush=True)
                 transcription = self.transcribe_audio(audio)
                 if transcription is None:
                     continue
 
+                print(
+                    "\r>>                                                  ",
+                    end="",
+                    flush=True,
+                )
                 print("\r>> ", end="", flush=True)
                 print(transcription, flush=True)
                 if transcription.lower() == "salir":
                     break
 
-                # el audio transcrito lo enviamos al LLM
+                # el audio transcrito lo enviamos al LLM y procesamos en un thread
                 self.messages.append({"role": "user", "content": transcription})
-                resp = ollama.chat(
-                    model=self.llm,
-                    messages=self.messages,
-                    options={
-                        "num_ctx": 2048,
-                        "temperature": 0.5,
-                        "num_predict": 512,
-                    },
-                    stream=True,
-                )
+                task = threading.Thread(target=self._chat)
+                task.start()
 
                 # presentamos lo que nos va devolviendo el LLM
                 answer = ""
                 word = ""
                 dot = False
-                for chunk in resp:
-                    text = chunk.message.content
+                while True:
+                    text = self.queue.get()
+                    if text is None:
+                        break
                     answer = answer + text
                     for ch in text:
                         if not dot:
