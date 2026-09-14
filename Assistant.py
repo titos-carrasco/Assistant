@@ -1,12 +1,9 @@
-import ollama
-import whisper
-import pyttsx3
-import speech_recognition as sr
-import numpy as np
-import queue
-import threading
 import time
-
+import threading
+import queue
+import ollama
+from Transcriber import Transcriber
+from Narrator import Narrator
 
 class Assistant:
     def __init__(
@@ -37,42 +34,13 @@ class Assistant:
         )
         self.queue = queue.Queue(0)
 
-        print("Inicializando Transcriptor...", flush=True)
-        self.transcriber = whisper.load_model(transcriber_model)
-        self.audio_recognizer = sr.Recognizer()
-        self.audio_recognizer.energy_threshold = 2000
-        self.audio_recognizer.dynamic_energy_threshold = False
-        self.audio_recognizer.pause_threshold = 1.0
-
-        print("Inicializando Narrador...", flush=True)
-        self.speech_engine = pyttsx3.init()
-        self.speech_engine.setProperty("volume", speech_volume)
-        self.speech_engine.setProperty("rate", speech_rate)
-
-    def say(self, text):
-        self.speech_engine.say(text)
-        self.speech_engine.runAndWait()
+        self.transcriber = Transcriber(transcriber_model=transcriber_model)
+        self.narrator = Narrator(speech_volume=speech_volume, speech_rate=speech_rate)
 
     def print_slow(self, text, delay=0.01):
         for letter in text:
             print(letter, end="", flush=True)
             time.sleep(delay)
-
-    def capture_audio(self, mic, timeout=1):
-        try:
-            return self.audio_recognizer.listen(mic, timeout=timeout).get_wav_data()
-        except sr.WaitTimeoutError:
-            return None
-
-    def transcribe_audio(self, audio):
-        arr = np.frombuffer(audio, dtype=np.int16)
-        arr = arr.astype(np.float32) / 32768.0
-        result = self.transcriber.transcribe(audio=arr, fp16=False, language="Spanish")
-        transcription = result["text"].strip()
-        if transcription == "":
-            return None
-        else:
-            return transcription
 
     def _chat(self):
         resp = ollama.chat(
@@ -183,5 +151,5 @@ class Assistant:
 
 # llm: phi3, llama3, deepseek-r1, deepseek-v2 -- https://ollama.com/search
 # transcriber_model: tiny, base, small, medium large, large-v2
-app = Assistant(llm="llama3", transcriber_model="small")
+app = Assistant(llm="qwen2.5-coder", transcriber_model="small")
 app.run()
